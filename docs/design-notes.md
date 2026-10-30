@@ -4,4 +4,4 @@ The app-screen direction is recorded in `.taste-skill/gauge/direction.json` and 
 
 The first viewport gives the capacity verdict and available-versus-design measure first. History, battery/AC use, observed runtime, recent activity, and device details follow as separate bands so the screen changes density while staying in one visual system.
 
-There was no owner report in the provided workspace, so the bundled sample is a synthetic, small demonstration report. Its values are intentionally plausible but do not assert the missing golden-fixture row counts or totals.
+No demonstration report is included in the shipped app. The synthetic parser fixture stays under `tests/fixtures/` for parser behavior only. Every visible dashboard measurement is read from the uploaded report or labeled as missing.

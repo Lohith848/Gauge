@@ -1,6 +1,6 @@
 # Gauge
 
-Gauge turns a Windows `powercfg /batteryreport` HTML file into a local battery health dashboard. Report contents are read and processed in the browser; there is no account or server-side processing.
+Gauge turns a Windows `powercfg /batteryreport` HTML file into a battery health dashboard. The uploaded HTML file is cached in the browser's IndexedDB. Numeric calculations happen locally. For the optional AI interpretation, Gauge sends parsed battery measurements to Groq through a server endpoint; computer names, BIOS details, battery serial numbers, and the original HTML are excluded.
 
 ## Run locally
 
@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Choose `Open a report`, or explore the bundled sample. Use Command Prompt or PowerShell to create a report with `powercfg /batteryreport`. XML reports are not supported in this phase.
+Copy `.env.example` to `.env.local` and set `GROQ_API_KEY` for local AI analysis. The key is read only by the server endpoint and is never bundled into the browser app. On Vercel, set `GROQ_API_KEY` in the project's Environment Variables. Use Command Prompt or PowerShell to create a report with `powercfg /batteryreport`, then upload the resulting HTML file. XML reports are not supported in this phase.
 
 ## Checks
 
@@ -23,8 +23,8 @@ npm run check:gradients
 npm run check:size
 ```
 
-The parser accepts the documented Windows HTML table classes. The sample report in `public/sample/` is synthetic demonstration data; it is not the owner's original report and must not be treated as fixture evidence.
+The parser accepts the documented Windows HTML table classes. There is no demo data in the app; the dashboard uses only uploaded report values. Missing measurements are labeled as unreported.
 
 ## Privacy
 
-Gauge does not upload or persist report data. The optional theme setting is the only local preference stored by the app. Production response headers deny cross-origin connections.
+The original report file stays in browser storage and can be removed with **Clear this report**. Parsed battery measurements are sent to Groq for AI interpretation when a report is uploaded or when AI analysis is retried. Computer names, BIOS details, battery serial numbers, and the original HTML are excluded from that request. Numeric dashboard metrics are calculated locally, and the AI text is presented separately as interpretation. The API key stays on the server.

@@ -6,3 +6,6 @@ test-results/
 tests/fixtures/real/
 *.tsbuildinfo
 work/
+.env.local
+.env.*
+!.env.example

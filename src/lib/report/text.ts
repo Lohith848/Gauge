@@ -22,8 +22,8 @@ export function parseUtcOffset(raw: string | null): number | null {
   const mins = Number(m[2]) * 60 + Number(m[3]); return m[1] === '-' ? -mins : mins;
 }
 export function formatDuration(seconds: number | null): string {
-  if (seconds === null || !Number.isFinite(seconds)) return '—';
+  if (seconds === null || !Number.isFinite(seconds)) return 'Not reported';
   const hours = Math.floor(seconds / 3600); const minutes = Math.floor((seconds % 3600) / 60);
   return hours ? `${hours} h ${minutes} min` : `${minutes} min`;
 }
-export function formatWh(mwh: number | null): string { return mwh === null ? '—' : `${(mwh / 1000).toFixed(1)} Wh`; }
+export function formatWh(mwh: number | null): string { return mwh === null ? 'Not reported' : `${(mwh / 1000).toFixed(1)} Wh`; }

@@ -5,10 +5,14 @@ import type { CapacityPoint, UsagePeriod } from '../../lib/report/types';
 export function CapacityChart({ points }: { points: CapacityPoint[] }) {
   const width = 820; const height = 250; const margin = { top: 20, right: 56, bottom: 42, left: 12 };
   const valid = points.filter((point) => point.fullChargeMwh !== null && point.designMwh !== null);
+  if (!valid.length) return <div className="chart-empty-state">No capacity history was included in this report.</div>;
   const dates = valid.map((point) => new Date(`${point.start}T00:00:00Z`));
-  const extent = dates.length ? [dates[0]!, dates[dates.length - 1]!] as [Date, Date] : [new Date('2025-01-01Z'), new Date('2026-01-01Z')];
-  const max = Math.max(60000, ...valid.flatMap((point) => [point.fullChargeMwh ?? 0, point.designMwh ?? 0]));
-  const min = Math.max(0, Math.floor(Math.min(40000, ...valid.map((point) => point.fullChargeMwh ?? max)) / 10000) * 10000 - 10000);
+  const extent = [dates[0]!, dates[dates.length - 1]!] as [Date, Date];
+  const values = valid.flatMap((point) => [point.fullChargeMwh!, point.designMwh!]);
+  const dataMin = Math.min(...values); const dataMax = Math.max(...values);
+  const padding = Math.max(1000, (dataMax - dataMin) * 0.12);
+  const max = dataMax + padding;
+  const min = Math.max(0, dataMin - padding);
   const x = scaleTime().domain(extent).range([margin.left, width - margin.right]);
   const y = scaleLinear().domain([min, max]).nice(4).range([height - margin.bottom, margin.top]);
   const actualLine = line<CapacityPoint>().defined((point) => point.fullChargeMwh !== null).x((point) => x(new Date(`${point.start}T00:00:00Z`))).y((point) => y(point.fullChargeMwh ?? 0)).curve(curveLinear)(valid) ?? '';
@@ -21,12 +25,12 @@ export function CapacityChart({ points }: { points: CapacityPoint[] }) {
       <path d={designLine} className="chart-design-line" /><path d={actualLine} className="chart-actual-line" />
       {valid.length > 0 && <circle cx={x(new Date(`${valid.at(-1)!.start}T00:00:00Z`))} cy={y(valid.at(-1)!.fullChargeMwh ?? 0)} r="4" className="chart-point" />}
       {xTicks.map((tick) => <text key={tick.toISOString()} x={x(tick)} y={height - 12} textAnchor="middle" className="chart-axis">{tick.toLocaleDateString('en', { month: 'short', year: '2-digit', timeZone: 'UTC' })}</text>)}
-      {!valid.length && <text x={width / 2} y={height / 2} textAnchor="middle" className="chart-empty">No capacity history in this report</text>}
     </svg></div>;
 }
 
 export function UsageChart({ periods }: { periods: UsagePeriod[] }) {
   const data = [...periods].sort((a, b) => a.start.localeCompare(b.start)).slice(-12);
+  if (!data.length) return <div className="chart-empty-state">No usage history was included in this report.</div>;
   const width = 820; const height = 190; const margin = { top: 12, right: 16, bottom: 38, left: 12 };
   const max = Math.max(1, ...data.flatMap((period) => [(period.battery.activeSec ?? 0) / 3600, (period.ac.activeSec ?? 0) / 3600]));
   const y = scaleLinear().domain([0, max]).nice(3).range([height - margin.bottom, margin.top]);

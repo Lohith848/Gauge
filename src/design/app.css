@@ -39,6 +39,7 @@ h1 { margin-bottom: 3px; font-size: 24px; font-weight: 500; line-height: 1.25; l
 .health-band { display: grid; grid-template-columns: minmax(215px, .9fr) minmax(310px, 1.5fr) minmax(138px, .48fr); gap: 22px; align-items: center; padding: 22px 24px; }
 .health-primary { min-width: 0; }
 .health-number { font-size: clamp(46px, 5vw, 64px); font-weight: 400; line-height: 1; letter-spacing: -.07em; font-variant-numeric: tabular-nums; }
+.health-number.health-unavailable { font-size: clamp(25px, 3.2vw, 38px); letter-spacing: -.04em; }
 .health-number span { margin-left: 2px; font-size: 27px; letter-spacing: -.04em; }
 .health-verdict { display: flex; align-items: center; gap: 8px; margin-top: 11px; font-weight: 500; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--positive); }
@@ -58,6 +59,17 @@ h1 { margin-bottom: 3px; font-size: 24px; font-weight: 500; line-height: 1.25; l
 .capacity-fill.low { fill: var(--negative); }
 .track-labels { display: flex; justify-content: space-between; margin-top: 7px; color: var(--faint); font-size: 11px; }
 .health-footnote { margin-top: 11px; color: var(--muted); font-size: 12px; }
+.metric strong { overflow-wrap: anywhere; }
+.ai-band { margin-top: 12px; }
+#ai-title { display: flex; align-items: center; gap: 8px; }
+#ai-title svg { color: var(--chart); }
+.ai-summary { max-width: 900px; margin: 22px 0; font-size: 15px; line-height: 1.65; }
+.ai-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.ai-columns h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.ai-columns ul { display: grid; gap: 9px; margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.ai-status { margin: 20px 0 4px; color: var(--muted); font-size: 13px; }
+.ai-meta { margin: 18px 0 0; color: var(--faint); font-size: 11px; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 14px; justify-content: flex-end; }
 .capacity-signature { display: grid; justify-items: center; gap: 6px; }
 .capacity-signature strong { font-weight: 500; font-size: 14px; font-variant-numeric: tabular-nums; }
 .battery-glyph { display: block; width: 38px; height: 61px; overflow: visible; }
@@ -65,6 +77,10 @@ h1 { margin-bottom: 3px; font-size: 24px; font-weight: 500; line-height: 1.25; l
 .battery-cap { fill: var(--control); }
 .battery-glyph-fill { fill: var(--chart); }
 .metric-strip { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 12px; padding: 16px 4px; }
+.latest-reading-band { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 20px; margin-top: 12px; padding: 15px 18px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.latest-reading-band > div { min-width: 0; }
+.latest-reading-band strong { display: block; margin-top: 5px; font-size: 16px; font-weight: 500; overflow-wrap: anywhere; }
+.latest-reading-band p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; }
 .metric { min-width: 0; padding: 0 18px; }
 .metric + .metric { border-left: 1px solid var(--rule); }
 .metric strong { display: block; margin-top: 6px; font-size: 25px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -77,6 +93,7 @@ h1 { margin-bottom: 3px; font-size: 24px; font-weight: 500; line-height: 1.25; l
 .section-heading p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
 .unit-tag { padding: 3px 7px; border-radius: 4px; background: var(--raised); color: var(--muted); font-size: 11px; }
 .chart-frame { margin-top: 8px; }
+.chart-empty-state { display: grid; min-height: 190px; place-items: center; color: var(--muted); font-size: 13px; text-align: center; }
 .chart-legend { display: flex; align-items: center; gap: 17px; padding-left: 2px; color: var(--muted); font-size: 11px; }
 .chart-legend span, .recent-legend span { display: flex; align-items: center; gap: 7px; }
 .legend-line { display: inline-block; width: 17px; border-top: 2px solid var(--chart); }
@@ -103,6 +120,7 @@ h1 { margin-bottom: 3px; font-size: 24px; font-weight: 500; line-height: 1.25; l
 .detail-columns { display: grid; grid-template-columns: minmax(0, .88fr) minmax(0, 1.3fr); gap: 12px; margin-top: 12px; }
 .runtime-band, .insights-band { min-height: 215px; }
 .runtime-figure { display: flex; align-items: baseline; gap: 8px; margin-top: 19px; font-size: 36px; font-weight: 400; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.runtime-figure.runtime-unavailable { font-size: 22px; letter-spacing: -.02em; }
 .runtime-figure span { color: var(--muted); font-size: 13px; letter-spacing: 0; }
 .runtime-caption { margin: 7px 0 18px; color: var(--muted); font-size: 12px; }
 .runtime-divider { border-top: 1px solid var(--rule); }
@@ -199,6 +217,7 @@ h1 { margin-bottom: 3px; font-size: 24px; font-weight: 500; line-height: 1.25; l
   .capacity-summary { padding: 15px 0 0; border: 0; border-top: 1px solid var(--rule); }
   .summary-head strong { font-size: 16px; }
   .metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px 0; }
+  .latest-reading-band { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 13px; }
   .metric { padding: 10px 13px; }
   .metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--rule); }
   .metric:nth-child(4) { border-top: 1px solid var(--rule); }
@@ -214,6 +233,8 @@ h1 { margin-bottom: 3px; font-size: 24px; font-weight: 500; line-height: 1.25; l
   .activity-date { display: grid; gap: 0; font-size: 11px; }
   .activity-value { font-size: 10px; }
   .details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 14px; }
+  .ai-columns { grid-template-columns: 1fr; gap: 17px; }
+  .detail-actions { justify-content: flex-start; }
   .section-heading p { max-width: 250px; }
   .section-heading .text-button { max-width: 110px; text-align: right; }
   .replace-row { flex-wrap: wrap; gap: 9px; }

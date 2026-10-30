@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { decodeReport, parseReport } from '../../src/lib/report';
 import type { SourceMeta } from '../../src/lib/report/types';
 
-const fixture = readFileSync('public/sample/sample-report.html', 'utf8');
-const meta: SourceMeta = { fileName: 'sample-battery-report.html', fileSizeBytes: fixture.length, format: 'windows-html' };
+const fixture = readFileSync('tests/fixtures/battery-report.html', 'utf8');
+const meta: SourceMeta = { fileName: 'battery-report.html', fileSizeBytes: fixture.length, format: 'windows-html' };
 
 describe('Windows report intake', () => {
-  it('parses the bundled demonstration report from the documented cell classes', () => {
+  it('parses a report fixture using the documented cell classes', () => {
     const result = parseReport(fixture, meta);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
