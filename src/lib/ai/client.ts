@@ -35,7 +35,9 @@ export async function requestAiReport(analysis: Analysis): Promise<AiReport> {
   try {
     body = JSON.parse(responseText) as { error?: string; report?: AiReport };
   } catch {
-    const detail = contentType.includes('text/html') || /^\\s*<!doctype html|^\\s*<html/i.test(responseText)
+    const trimmedResponse = responseText.trimStart().toLowerCase();
+    const isHtml = contentType.includes('text/html') || trimmedResponse.startsWith('<!doctype html') || trimmedResponse.startsWith('<html');
+    const detail = isHtml
       ? 'The AI endpoint returned an HTML page instead of JSON.'
       : 'The AI endpoint returned an unreadable response.';
     throw new Error(`${detail} (HTTP ${response.status}). Your calculated battery report is still available.`);
