@@ -3,120 +3,81 @@ import type { AiReport } from '../ai/types';
 import { formatWh } from '../report/text';
 import type { BatteryReport } from '../report/types';
 
-function wrappedLines(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (line && context.measureText(next).width > maxWidth) {
-      lines.push(line);
-      line = word;
-    } else line = next;
+const WIDTH = 1200;
+const PAD = 72;
+const CONTENT = WIDTH - PAD * 2;
+type TextRow = { text: string; lines: string[]; font: string; color: string; lineHeight: number; gapAfter: number };
+
+function wrap(context: CanvasRenderingContext2D, text: string, width: number): string[] {
+  const result: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    let line = '';
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && context.measureText(next).width > width) { result.push(line); line = word; }
+      else line = next;
+    }
+    result.push(line);
   }
-  if (line) lines.push(line);
-  return lines;
+  return result;
 }
 
 export function downloadReportImage(report: BatteryReport, analysis: Analysis, ai: AiReport | null): void {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1400;
-  const sections = [
-    ...(ai ? [ai.summary, ...ai.findings, ...ai.recommendations, ...ai.limitations] : analysis.observations),
-  ];
-  canvas.height = 1100 + Math.min(16, sections.length) * 120;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('This browser cannot create an image from the report.');
-
-  ctx.fillStyle = '#f2f4f7';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(52, 48, canvas.width - 104, canvas.height - 96);
-  ctx.strokeStyle = '#e2e5e9';
-  ctx.strokeRect(52, 48, canvas.width - 104, canvas.height - 96);
-  ctx.fillStyle = '#1d5fbf';
-  ctx.fillRect(88, 88, 8, 42);
-
-  let y = 112;
-  ctx.fillStyle = '#101215';
-  ctx.font = '600 34px Geist, Arial, sans-serif';
-  ctx.fillText('Gauge · Battery report', 116, y);
-  y += 34;
-  ctx.fillStyle = '#5f6368';
-  ctx.font = '16px Geist, Arial, sans-serif';
-  ctx.fillText(`${report.system.productName ?? 'Device'} · Generated ${report.system.reportTime.slice(0, 10)}`, 116, y);
-  y += 58;
-
-  ctx.fillStyle = '#101215';
-  ctx.font = '500 92px Geist, Arial, sans-serif';
-  ctx.fillText(analysis.healthPercent === null ? 'Not reported' : `${analysis.healthPercent}%`, 116, y);
-  ctx.fillStyle = '#5f6368';
-  ctx.font = '18px Geist, Arial, sans-serif';
-  ctx.fillText(analysis.verdict, 120, y + 34);
-  y += 74;
-
-  const metrics = [
-    ['Full-charge capacity', formatWh(analysis.fullChargeMwh)],
-    ['Design capacity', formatWh(analysis.designMwh)],
-    ['Estimated runtime', analysis.runtimeHours === null ? 'Not enough data' : `${analysis.runtimeHours.toFixed(1)} h`],
-    ['Battery use', analysis.batteryShare === null ? 'Not enough data' : `${analysis.batteryShare}% of active time`],
-    ['Cycle count', report.batteries[0]?.cycleCount ?? 'Not reported'],
-    ['Capacity history', `${analysis.capacity.length} periods`],
-  ];
-  const cardWidth = 374;
-  const gap = 22;
-  metrics.forEach(([label, value], index) => {
-    const col = index % 3;
-    const row = Math.floor(index / 3);
-    const x = 116 + col * (cardWidth + gap);
-    const top = y + row * 102;
-    ctx.fillStyle = '#f2f4f7';
-    ctx.fillRect(x, top, cardWidth, 80);
-    ctx.fillStyle = '#5f6368';
-    ctx.font = '15px Geist, Arial, sans-serif';
-    ctx.fillText(String(label), x + 18, top + 26);
-    ctx.fillStyle = '#101215';
-    ctx.font = '500 22px Geist, Arial, sans-serif';
-    ctx.fillText(String(value), x + 18, top + 59, cardWidth - 36);
-  });
-  y += 226;
-
-  const drawSection = (title: string, paragraphs: string[]) => {
-    if (!paragraphs.length) return;
-    ctx.fillStyle = '#101215';
-    ctx.font = '600 20px Geist, Arial, sans-serif';
-    ctx.fillText(title, 116, y);
-    y += 28;
-    ctx.fillStyle = '#34383e';
-    ctx.font = '16px Geist, Arial, sans-serif';
-    for (const paragraph of paragraphs) {
-      const lines = wrappedLines(ctx, `• ${paragraph}`, 1130);
-      for (const line of lines) {
-        ctx.fillText(line, 120, y);
-        y += 24;
-      }
-      y += 5;
-    }
-    y += 14;
+  const measure = document.createElement('canvas').getContext('2d');
+  if (!measure) throw new Error('This browser cannot create an image from the report.');
+  const rows: TextRow[] = [];
+  const add = (text: string, font: string, color: string, lineHeight: number, gapAfter = 0, inset = 0) => {
+    measure.font = font;
+    rows.push({ text, lines: wrap(measure, text, CONTENT - inset), font, color, lineHeight, gapAfter });
+  };
+  const section = (title: string, items: string[]) => {
+    if (!items.length) return;
+    add(title, '600 19px Arial, sans-serif', '#17202b', 27, 8);
+    for (const item of items) add(`•  ${item}`, '16px Arial, sans-serif', '#35404d', 25, 7, 8);
+    rows.push({ text: '', lines: [], font: '', color: '', lineHeight: 0, gapAfter: 18 });
   };
 
-  if (ai) {
-    drawSection('AI overview', [ai.summary]);
-    drawSection('Findings', ai.findings);
-    drawSection('Recommendations', ai.recommendations);
-    drawSection('Limitations', ai.limitations);
-  } else drawSection('Measured observations', analysis.observations);
-  drawSection('Data coverage', [
-    `${analysis.drains.length} active battery discharge sessions, ${analysis.capacity.length} capacity periods, and ${analysis.usage.length} usage periods were read from this report.`,
-    'Numeric measurements are calculated from the uploaded Windows report. AI interpretation is generated separately.',
+  add('Gauge · Battery report', '600 32px Arial, sans-serif', '#17202b', 40, 8);
+  add(`${report.system.productName ?? 'Device not reported'}  ·  Report generated ${report.system.reportTime.slice(0, 10)}`, '15px Arial, sans-serif', '#637080', 22, 23);
+  add(analysis.healthPercent === null ? 'Battery health not reported' : `${analysis.healthPercent}% battery health`, '600 46px Arial, sans-serif', '#17202b', 54, 5);
+  add(analysis.verdict, '16px Arial, sans-serif', '#4f5d6d', 24, 22);
+  section('Measured summary', [
+    `Full-charge capacity: ${formatWh(analysis.fullChargeMwh)}; design capacity: ${formatWh(analysis.designMwh)}.`,
+    `Capacity change from earliest available history: ${analysis.capacityDropPercent === null ? 'not enough data' : `${analysis.capacityDropPercent > 0 ? '−' : '+'}${Math.abs(analysis.capacityDropPercent)}%`}.`,
+    `Estimated active runtime: ${analysis.runtimeHours === null ? 'not enough measured discharge data' : `${analysis.runtimeHours.toFixed(1)} hours based on median measured discharge rate`}.`,
+    `Active use: ${analysis.batteryActiveHours.toFixed(1)} hours on battery and ${analysis.acActiveHours.toFixed(1)} hours on AC.`,
   ]);
-  ctx.fillStyle = '#686d74';
-  ctx.font = '13px Geist, Arial, sans-serif';
-  ctx.fillText(`Source: ${report.source.fileName} · Gauge · ${new Date().toLocaleDateString()}`, 116, canvas.height - 78);
+  section('Battery cycle counts', report.batteries.map((battery, index) => `${battery.name ?? `Battery ${index + 1}`}: ${battery.cycleCount === null ? 'not reported' : `${battery.cycleCount} cycles`}`));
+  section(ai ? 'AI breakdown' : 'Measured observations', ai ? [ai.summary, ...ai.findings.map((item) => `Finding: ${item}`), ...ai.recommendations.map((item) => `Recommendation: ${item}`), ...ai.limitations.map((item) => `Limitation: ${item}`)] : analysis.observations);
+  section('Report coverage', [
+    `${analysis.drains.length} active discharge sessions, ${analysis.capacity.length} capacity history periods, ${analysis.usage.length} usage history periods, and ${report.recentUsage.length} recent power entries were parsed.`,
+    'Measurements are calculated locally from the uploaded Windows report. AI interpretation is generated separately from report measurements.',
+  ]);
 
-  const url = canvas.toDataURL('image/png');
+  let height = PAD + 26;
+  for (const row of rows) height += row.lines.length * row.lineHeight + row.gapAfter;
+  height += 74;
+  const canvas = document.createElement('canvas');
+  canvas.width = WIDTH;
+  canvas.height = Math.max(720, Math.ceil(height));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('This browser cannot create an image from the report.');
+  ctx.fillStyle = '#f4f6f8'; ctx.fillRect(0, 0, WIDTH, canvas.height);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(36, 36, WIDTH - 72, canvas.height - 72);
+  ctx.strokeStyle = '#e2e7ec'; ctx.lineWidth = 1; ctx.strokeRect(36.5, 36.5, WIDTH - 73, canvas.height - 73);
+  ctx.fillStyle = '#256a55'; ctx.fillRect(PAD, 62, 5, 42);
+  let y = PAD + 4;
+  for (const row of rows) {
+    ctx.font = row.font; ctx.fillStyle = row.color; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    for (const line of row.lines) { y += row.lineHeight; ctx.fillText(line, PAD, y, CONTENT); }
+    y += row.gapAfter;
+  }
+  ctx.strokeStyle = '#e6eaee'; ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(WIDTH - PAD, y); ctx.stroke();
+  y += 27;
+  ctx.font = '12px Arial, sans-serif'; ctx.fillStyle = '#75808c';
+  ctx.fillText(`Source: ${report.source.fileName}  ·  Gauge  ·  Exported ${new Date().toLocaleDateString()}`, PAD, y, CONTENT);
   const anchor = document.createElement('a');
-  anchor.href = url;
+  anchor.href = canvas.toDataURL('image/png');
   anchor.download = 'gauge-battery-report.png';
   anchor.click();
 }

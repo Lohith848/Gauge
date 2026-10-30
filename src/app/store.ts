@@ -8,6 +8,7 @@ import type { AiReport } from '../lib/ai/types';
 
 type AiStatus = 'idle' | 'loading' | 'complete' | 'error';
 type CacheStatus = 'loading' | 'saved' | 'missing' | 'unavailable';
+type LoadingStage = 'reading' | 'caching' | 'analyzing' | null;
 
 interface GaugeState {
   report: BatteryReport | null;
@@ -17,6 +18,7 @@ interface GaugeState {
   aiError: string | null;
   error: ParseError | null;
   loading: boolean;
+  loadingStage: LoadingStage;
   cacheStatus: CacheStatus;
   cacheWarning: string | null;
   fileName: string | null;
@@ -34,6 +36,7 @@ export const useGaugeStore = create<GaugeState>((set, get) => ({
   aiError: null,
   error: null,
   loading: false,
+  loadingStage: null,
   cacheStatus: 'loading',
   cacheWarning: null,
   fileName: null,
@@ -61,14 +64,15 @@ export const useGaugeStore = create<GaugeState>((set, get) => ({
   },
 
   setFile: async (file) => {
-    set({ loading: true, error: null, aiReport: null, aiStatus: 'idle', aiError: null, cacheWarning: null, fileName: file.name });
+    set({ loading: true, loadingStage: 'reading', error: null, aiReport: null, aiStatus: 'idle', aiError: null, cacheWarning: null, fileName: file.name });
     try {
       const result = await parseFile(file);
       if (!result.ok) {
-        set({ report: null, analysis: null, loading: false, error: result.error, fileName: null });
+        set({ report: null, analysis: null, loading: false, loadingStage: null, error: result.error, fileName: null });
         return;
       }
       const analysis = analyze(result.value);
+      set({ loadingStage: 'caching' });
       let cacheStatus: CacheStatus = 'saved';
       let cacheWarning: string | null = null;
       try {
@@ -77,17 +81,17 @@ export const useGaugeStore = create<GaugeState>((set, get) => ({
         cacheStatus = 'unavailable';
         cacheWarning = 'This report was read, but the browser could not cache it. It will not be restored after you close the tab.';
       }
-      set({ report: result.value, analysis, loading: false, error: null, cacheStatus, cacheWarning });
+      set({ report: result.value, analysis, loading: true, loadingStage: 'analyzing', error: null, cacheStatus, cacheWarning });
       void get().analyzeWithAi();
     } catch {
-      set({ report: null, analysis: null, error: makeParseError('E_NOT_BATTERY_REPORT'), loading: false, fileName: null });
+      set({ report: null, analysis: null, error: makeParseError('E_NOT_BATTERY_REPORT'), loading: false, loadingStage: null, fileName: null });
     }
   },
 
   analyzeWithAi: async () => {
     const { report, analysis } = get();
     if (!report || !analysis) return;
-    set({ aiStatus: 'loading', aiError: null });
+    set({ aiStatus: 'loading', aiError: null, ...(get().loading ? { loadingStage: 'analyzing' as const } : {}) });
     try {
       const aiReport = await requestAiReport(report, analysis);
       set({ aiReport, aiStatus: 'complete' });
@@ -98,11 +102,13 @@ export const useGaugeStore = create<GaugeState>((set, get) => ({
       }
     } catch (error) {
       set({ aiStatus: 'error', aiError: error instanceof Error ? error.message : 'AI analysis failed.' });
+    } finally {
+      set({ loading: false, loadingStage: null });
     }
   },
 
   clear: async () => {
-    set({ report: null, analysis: null, aiReport: null, aiStatus: 'idle', aiError: null, error: null, loading: false, fileName: null, cacheStatus: 'missing', cacheWarning: null });
+    set({ report: null, analysis: null, aiReport: null, aiStatus: 'idle', aiError: null, error: null, loading: false, loadingStage: null, fileName: null, cacheStatus: 'missing', cacheWarning: null });
     try {
       await clearCachedReport();
     } catch {
