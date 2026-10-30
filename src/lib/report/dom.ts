@@ -94,16 +94,25 @@ export function parseHtmlReport(text: string, source: import('./types').SourceMe
     };
     const batteryRows = (data.batteries ?? []).filter((row) => !row.gap);
     const batteryCount = Math.max(0, (batteryRows[0]?.cells.length ?? 1) - 1);
-    const batteryKeys = ['name', 'manufacturer', 'serialNumber', 'chemistryRaw', 'designCapacityMwh', 'fullChargeCapacityMwh', 'cycleCount'] as const;
+    const batteryKeyByLabel = new Map<string, 'name' | 'manufacturer' | 'serialNumber' | 'chemistryRaw' | 'designCapacityMwh' | 'fullChargeCapacityMwh' | 'cycleCount'>([
+      ['name', 'name'], ['manufacturer', 'manufacturer'], ['serial number', 'serialNumber'], ['chemistry', 'chemistryRaw'],
+      ['design capacity', 'designCapacityMwh'], ['full charge capacity', 'fullChargeCapacityMwh'], ['cycle count', 'cycleCount'],
+    ]);
     const rawBatteries: Record<string, string | null>[] = Array.from({ length: batteryCount }, () => ({}));
-    batteryRows.forEach((row, index) => { for (let i = 0; i < batteryCount; i += 1) rawBatteries[i]![batteryKeys[index]!] = valueOrNull(row.cells[i + 1]); });
+    batteryRows.forEach((row) => {
+      const label = normalize(row.cells[0]?.text).toLowerCase();
+      const key = batteryKeyByLabel.get(label);
+      if (key) for (let i = 0; i < batteryCount; i += 1) rawBatteries[i]![key] = valueOrNull(row.cells[i + 1]);
+    });
     const batteries = rawBatteries.map((raw, index) => {
       const chem = raw.chemistryRaw;
+      const cycleCount = parseFirstInt(raw.cycleCount ?? '');
+      if (cycleCount !== null && cycleCount > 10_000) warnings.push({ code: 'W_CYCLE_COUNT_RANGE', message: `A cycle count above 10,000 for battery ${index + 1} was ignored as an implausible report value.` });
       return {
         index, name: raw.name ?? null, manufacturer: raw.manufacturer ?? null, serialNumber: raw.serialNumber ?? null,
         chemistryRaw: chem ?? null, chemistryFriendly: chem ? friendlyChemistry[chem.toLowerCase()] ?? null : null,
         designCapacityMwh: parseFirstInt(raw.designCapacityMwh ?? ''), fullChargeCapacityMwh: parseFirstInt(raw.fullChargeCapacityMwh ?? ''),
-        cycleCount: parseFirstInt(raw.cycleCount ?? ''),
+        cycleCount: cycleCount !== null && cycleCount <= 10_000 ? cycleCount : null,
       };
     });
     if (!batteries.length) return { ok: false, error: makeParseError('E_NO_BATTERY') };

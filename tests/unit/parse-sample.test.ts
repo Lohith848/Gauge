@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decodeReport, parseReport } from '../../src/lib/report';
+import { analyze } from '../../src/lib/analysis';
 import type { SourceMeta } from '../../src/lib/report/types';
 
 const fixture = readFileSync('tests/fixtures/battery-report.html', 'utf8');
@@ -20,6 +21,27 @@ describe('Windows report intake', () => {
     expect(result.value.usageHistory[0]).toMatchObject({ start: '2025-10-27', end: '2025-11-03', days: 7, battery: { activeSec: 71_646, standbySec: 11_857 } });
     expect(result.value.capacityHistory.at(-1)).toMatchObject({ start: '2026-10-25', fullChargeMwh: 46_088, designMwh: 55_997 });
     expect(result.value.runtimeEstimates[0]?.atFullCharge.standby).toMatchObject({ durationSec: 62_391, pctOfTarget: 92, targetHours: 16 });
+  });
+
+  it('maps battery fields by their labels and calculates health from capacity history when the summary field is absent', () => {
+    const missingSerial = fixture.replace('<tr><td><span class="label">SERIAL NUMBER</span></td><td>0000</td></tr>', '');
+    const missingSummaryCapacity = missingSerial.replace('<tr><td><span class="label">FULL CHARGE CAPACITY</span></td><td>46,088 mWh</td></tr>', '');
+    const result = parseReport(missingSummaryCapacity, meta);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.batteries[0]).toMatchObject({ designCapacityMwh: 55_997, fullChargeCapacityMwh: null, cycleCount: null });
+    const calculated = analyze(result.value);
+    expect(calculated.fullChargeMwh).toBe(46_088);
+    expect(calculated.healthPercent).toBe(82);
+  });
+
+  it('omits implausible cycle counts instead of presenting capacity-sized values as cycles', () => {
+    const withMisreadCycle = fixture.replace('<tr><td><span class="label">CYCLE COUNT</span></td><td class="nullValue">-</td>', '<tr><td><span class="label">CYCLE COUNT</span></td><td>46,168</td>');
+    const result = parseReport(withMisreadCycle, meta);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.batteries[0]?.cycleCount).toBeNull();
+    expect(result.value.warnings.some((warning) => warning.code === 'W_CYCLE_COUNT_RANGE')).toBe(true);
   });
 
   it('returns the documented empty, XML, and non-report errors', () => {

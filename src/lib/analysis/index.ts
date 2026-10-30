@@ -9,13 +9,14 @@ export interface Analysis {
 const hours = (seconds: number | null) => seconds === null ? 0 : seconds / 3600;
 export function analyze(report: BatteryReport): Analysis {
   const battery = report.batteries[0];
-  const designMwh = battery?.designCapacityMwh ?? null;
-  const fullChargeMwh = battery?.fullChargeCapacityMwh ?? null;
-  const healthPercent = designMwh && fullChargeMwh !== null ? Math.round(fullChargeMwh / designMwh * 100) : null;
   const capacity = [...report.capacityHistory].sort((a, b) => a.start.localeCompare(b.start));
+  const latestCapacity = [...capacity].reverse().find((point) => point.fullChargeMwh !== null);
+  const designMwh = battery?.designCapacityMwh ?? latestCapacity?.designMwh ?? null;
+  const fullChargeMwh = battery?.fullChargeCapacityMwh ?? latestCapacity?.fullChargeMwh ?? null;
+  const healthPercent = designMwh && fullChargeMwh !== null ? Math.round(fullChargeMwh / designMwh * 100) : null;
   const values = capacity.map((point) => point.fullChargeMwh).filter((value): value is number => value !== null);
-  const firstCapacity = values[0] ?? fullChargeMwh;
-  const capacityDropPercent = firstCapacity && fullChargeMwh !== null ? Math.round((firstCapacity - fullChargeMwh) / firstCapacity * 100) : null;
+  const firstCapacity = values[0] ?? null;
+  const capacityDropPercent = firstCapacity !== null && firstCapacity > 0 && fullChargeMwh !== null ? Math.round((firstCapacity - fullChargeMwh) / firstCapacity * 100) : null;
   const usage = [...report.usageHistory].sort((a, b) => a.start.localeCompare(b.start));
   const batteryActiveHours = usage.reduce((sum, period) => sum + hours(period.battery.activeSec), 0);
   const acActiveHours = usage.reduce((sum, period) => sum + hours(period.ac.activeSec), 0);
