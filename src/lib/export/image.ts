@@ -232,7 +232,10 @@ export function downloadReportImage(report: BatteryReport, analysis: Analysis, a
   const detailsX = LEFT + textColumnWidth + chartGap;
   const detailsWidth = RIGHT - detailsX;
   const aiItems = ai ? [
-    ...ai.findings.map((item) => `Finding · ${item}`),
+    `Health assessment · ${ai.healthAssessment}`,
+    `Capacity explanation · ${ai.capacityExplanation}`,
+    `Usage pattern · ${ai.usagePattern}`,
+    `Runtime explanation · ${ai.runtimeExplanation}`,
     ...ai.recommendations.map((item) => `Recommendation · ${item}`),
     ...ai.limitations.map((item) => `Report limitation · ${item}`),
   ] : analysis.observations;
@@ -474,3 +477,4 @@ export function downloadReportImage(report: BatteryReport, analysis: Analysis, a
   anchor.download = 'gauge-battery-report.png';
   anchor.click();
 }
+

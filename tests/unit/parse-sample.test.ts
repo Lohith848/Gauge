@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeReport, parseReport } from '../../src/lib/report';
 import { analyze } from '../../src/lib/analysis';
-import { requestAiReport } from '../../src/lib/ai/client';
+import { makeAiPayload, requestAiReport } from '../../src/lib/ai/client';
 import type { SourceMeta } from '../../src/lib/report/types';
 
 const fixture = readFileSync('tests/fixtures/battery-report.html', 'utf8');
@@ -58,6 +58,34 @@ describe('Windows report intake', () => {
     await expect(requestAiReport(analyze(result.value))).rejects.toThrow('Groq could not complete the analysis.');
   });
 
+  it('sends aggregate calculations and accepts a complete Groq explanation', async () => {
+    const result = parseReport(fixture, meta);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const analysis = analyze(result.value);
+    const payload = makeAiPayload(analysis);
+    expect(payload).toMatchObject({ healthPercent: 82, designMwh: 55_997, fullChargeMwh: 46_088, capacityHistoryPeriods: 6, usageHistoryPeriods: 6, dischargeSessionCount: 4 });
+    expect(payload).not.toHaveProperty('html');
+    expect(payload).not.toHaveProperty('device');
+
+    const report = {
+      summary: 'The report measures battery health at 82% and shows declining recorded capacity.',
+      healthAssessment: 'The measured health is 82%, which Gauge classifies as Good.',
+      capacityExplanation: 'Design capacity is 55,997 mWh and recorded full-charge capacity is 46,088 mWh.',
+      usagePattern: 'The report contains 52 usage periods and records active time on battery and AC.',
+      runtimeExplanation: 'Windows runtime values are estimates included in the report, not live measurements.',
+      recommendations: ['Use Battery Saver when you need longer unplugged use.'],
+      limitations: ['Cycle count is not reported.'],
+      model: 'openai/gpt-oss-120b',
+      generatedAt: '2026-10-30T10:00:00.000Z',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ report }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )));
+    await expect(requestAiReport(analysis)).resolves.toEqual(report);
+  });
+
   it('does not expose object coercion text when the API returns an invalid AI report', async () => {
     const result = parseReport(fixture, meta);
     expect(result.ok).toBe(true);
@@ -94,3 +122,4 @@ describe('Windows report intake', () => {
     }
   });
 });
+

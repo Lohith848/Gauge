@@ -22,7 +22,10 @@ function errorMessage(value: unknown, depth = 0): string | null {
 function isAiReport(value: unknown): value is AiReport {
   const report = asRecord(value);
   return !!report && typeof report.summary === 'string' &&
-    Array.isArray(report.findings) && report.findings.every((item) => typeof item === 'string') &&
+    typeof report.healthAssessment === 'string' &&
+    typeof report.capacityExplanation === 'string' &&
+    typeof report.usagePattern === 'string' &&
+    typeof report.runtimeExplanation === 'string' &&
     Array.isArray(report.recommendations) && report.recommendations.every((item) => typeof item === 'string') &&
     Array.isArray(report.limitations) && report.limitations.every((item) => typeof item === 'string') &&
     typeof report.model === 'string' && typeof report.generatedAt === 'string';
@@ -31,13 +34,16 @@ function isAiReport(value: unknown): value is AiReport {
 export function makeAiPayload(analysis: Analysis): AiPayload {
   const {
     healthPercent, verdict, designMwh, fullChargeMwh, capacityLostMwh, lossPercent, cycleCount, trend,
-    batteryActiveHours, batteryStandbyHours, acActiveHours, acStandbyHours, latestRuntimeSec,
-    averageRuntimeSec, designRuntimeSec, fullChargeRuntimeSec, recentUsage,
+    batteryActiveHours, batteryStandbyHours, acActiveHours, acStandbyHours, batteryShare, latestRuntimeSec,
+    averageRuntimeSec, designRuntimeSec, fullChargeRuntimeSec, capacity, usage, drains, recentUsage,
   } = analysis;
   return {
     healthPercent, verdict, designMwh, fullChargeMwh, capacityLostMwh, lossPercent, cycleCount, trend,
-    batteryActiveHours, batteryStandbyHours, acActiveHours, acStandbyHours, latestRuntimeSec,
+    batteryActiveHours, batteryStandbyHours, acActiveHours, acStandbyHours, batteryShare, latestRuntimeSec,
     averageRuntimeSec, designRuntimeSec, fullChargeRuntimeSec,
+    capacityHistoryPeriods: capacity.length,
+    usageHistoryPeriods: usage.length,
+    dischargeSessionCount: drains.length,
     recentUsage: recentUsage.map(({ start, state, source, remainingPercent, remainingMwh }) => ({
       start, state, source, remainingPercent, remainingMwh,
     })),
@@ -82,3 +88,4 @@ export async function requestAiReport(analysis: Analysis): Promise<AiReport> {
   }
   return body.report;
 }
+
