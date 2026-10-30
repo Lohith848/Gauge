@@ -18,12 +18,31 @@ export function makeAiPayload(analysis: Analysis): AiPayload {
 }
 
 export async function requestAiReport(analysis: Analysis): Promise<AiReport> {
-  const response = await globalThis.fetch('/api/analyze', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(makeAiPayload(analysis)),
-  });
-  const body = await response.json() as { error?: string; report?: AiReport };
-  if (!response.ok || !body.report) throw new Error(body.error ?? 'The AI analysis could not be completed.');
+  let response: Response;
+  try {
+    response = await globalThis.fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(makeAiPayload(analysis)),
+    });
+  } catch {
+    throw new Error('Could not reach the AI analysis endpoint. Your calculated battery report is still available.');
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  const responseText = await response.text();
+  let body: { error?: string; report?: AiReport };
+  try {
+    body = JSON.parse(responseText) as { error?: string; report?: AiReport };
+  } catch {
+    const detail = contentType.includes('text/html') || /^\\s*<!doctype html|^\\s*<html/i.test(responseText)
+      ? 'The AI endpoint returned an HTML page instead of JSON.'
+      : 'The AI endpoint returned an unreadable response.';
+    throw new Error(`${detail} (HTTP ${response.status}). Your calculated battery report is still available.`);
+  }
+
+  if (!response.ok || !body.report) {
+    throw new Error(body.error ?? `The AI analysis could not be completed (HTTP ${response.status}).`);
+  }
   return body.report;
 }
