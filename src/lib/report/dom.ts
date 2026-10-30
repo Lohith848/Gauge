@@ -75,8 +75,18 @@ export function parseHtmlReport(text: string, source: import('./types').SourceMe
       if (kind !== 'unknown' && !data[kind]) data[kind] = table.rows;
     }
     const sysRows = (data.system ?? []).filter((row) => !row.gap);
-    const sysVals = sysRows.map((row) => row.cells[1]?.text ?? null);
-    const reportCell = sysRows[6]?.cells[1];
+    const systemKeyByLabel = new Map<string, 'computerName' | 'productName' | 'bios' | 'osBuild' | 'platformRole' | 'connectedStandby' | 'reportTime'>([
+      ['computer name', 'computerName'], ['system product name', 'productName'], ['product name', 'productName'],
+      ['bios', 'bios'], ['os build', 'osBuild'], ['platform role', 'platformRole'],
+      ['connected standby', 'connectedStandby'], ['report time', 'reportTime'],
+    ]);
+    const systemValues: Partial<Record<'computerName' | 'productName' | 'bios' | 'osBuild' | 'platformRole' | 'connectedStandby' | 'reportTime', string | null>> = {};
+    for (const row of sysRows) {
+      const label = normalize(row.cells[0]?.text).toLowerCase();
+      const key = systemKeyByLabel.get(label);
+      if (key) systemValues[key] = row.cells[1]?.text ?? null;
+    }
+    const reportCell = sysRows.find((row) => systemKeyByLabel.get(normalize(row.cells[0]?.text).toLowerCase()) === 'reportTime')?.cells[1];
     const recentRows = (data.recentUsage ?? []).filter((row) => !row.gap);
     const lastRecent = recentRows.at(-1)?.cells.find((item) => has(item, 'dateTime'));
     const carriedDate = [...recentRows].reverse().map((row) => {
@@ -87,8 +97,8 @@ export function parseHtmlReport(text: string, source: import('./types').SourceMe
     const reportTime = reportCell?.date && reportCell?.time ? `${reportCell.date}T${reportCell.time}` : carriedDate && recentTime ? `${carriedDate}T${recentTime}` : null;
     if (!reportCell?.date) warnings.push({ code: 'W_REPORT_TIME_FALLBACK', message: 'The report time was not present.' });
     const system = {
-      computerName: sysVals[0] ?? null, productName: sysVals[1] ?? null, bios: sysVals[2] ?? null,
-      osBuild: sysVals[3] ?? null, platformRole: sysVals[4] ?? null, connectedStandby: sysVals[5] ?? null,
+      computerName: systemValues.computerName ?? null, productName: systemValues.productName ?? null, bios: systemValues.bios ?? null,
+      osBuild: systemValues.osBuild ?? null, platformRole: systemValues.platformRole ?? null, connectedStandby: systemValues.connectedStandby ?? null,
       reportTime, utcOffsetMinutes: parseUtcOffset(doc.querySelector('meta[name="ReportUtcOffset"]')?.getAttribute('content') ?? null),
     };
     const batteryRows = (data.batteries ?? []).filter((row) => !row.gap);

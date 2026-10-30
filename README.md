@@ -1,6 +1,6 @@
 # Gauge
 
-Gauge turns a Windows `powercfg /batteryreport` HTML file into a battery health dashboard. The uploaded HTML file is cached in the browser's IndexedDB. Numeric calculations happen locally. For the optional AI interpretation, Gauge sends parsed battery measurements to Groq through a server endpoint; computer names, BIOS details, battery serial numbers, and the original HTML are excluded.
+Gauge turns a Windows `powercfg /batteryreport` HTML file into a battery health dashboard. The uploaded HTML is processed in the active browser tab and is not persisted. Numeric calculations happen locally. For the optional AI interpretation, Gauge sends calculated battery measurements to Groq through a server endpoint; computer names, BIOS details, battery serial numbers, original filenames, and the original HTML are excluded.
 
 ## Run locally
 
@@ -27,4 +27,4 @@ The parser accepts the documented Windows HTML table classes. There is no demo d
 
 ## Privacy
 
-The original report file stays in browser storage and can be removed with **Clear this report**. Parsed battery measurements are sent to Groq for AI interpretation when a report is uploaded or when AI analysis is retried. Computer names, BIOS details, battery serial numbers, and the original HTML are excluded from that request. Numeric dashboard metrics are calculated locally, and the AI text is presented separately as interpretation. The API key stays on the server.
+The original report stays in memory for the active tab and can be removed with **Clear this report**. Calculated battery measurements and report-derived readings are sent to Groq for AI interpretation when a report is uploaded or when AI analysis is retried. Device identifiers, BIOS details, battery serial numbers, filenames, and the original HTML are excluded from that request. Numeric dashboard metrics are calculated locally, and the AI text is presented separately as interpretation. The API key stays on the server. The theme preference is the only value persisted in local storage.

@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeReport, parseReport } from '../../src/lib/report';
 import { analyze } from '../../src/lib/analysis';
+import { requestAiReport } from '../../src/lib/ai/client';
 import type { SourceMeta } from '../../src/lib/report/types';
 
 const fixture = readFileSync('tests/fixtures/battery-report.html', 'utf8');
 const meta: SourceMeta = { fileName: 'battery-report.html', fileSizeBytes: fixture.length, format: 'windows-html' };
+afterEach(() => vi.unstubAllGlobals());
 
 describe('Windows report intake', () => {
   it('parses a report fixture using the documented cell classes', () => {
@@ -13,6 +15,7 @@ describe('Windows report intake', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.system.reportTime).toBe('2026-10-26T18:47:44');
+    expect(result.value.system.productName).toBe('ASUS TUF Gaming F16');
     expect(result.value.system.utcOffsetMinutes).toBe(330);
     expect(result.value.batteries[0]).toMatchObject({ designCapacityMwh: 55_997, fullChargeCapacityMwh: 46_088, cycleCount: null, chemistryFriendly: 'Lithium-ion' });
     expect(result.value.recentUsage[0]).toMatchObject({ start: '2026-10-21T18:58:39', remainingPercent: 73, remainingMwh: 33_714, source: 'battery' });
@@ -33,6 +36,37 @@ describe('Windows report intake', () => {
     const calculated = analyze(result.value);
     expect(calculated.fullChargeMwh).toBe(46_088);
     expect(calculated.healthPercent).toBe(82);
+  });
+
+  it('identifies the reported product name by its label when earlier system fields are missing', () => {
+    const reportWithoutComputerName = fixture.replace('<tr><td class="label">COMPUTER NAME</td><td>DEMO-LAPTOP</td></tr>', '');
+    const result = parseReport(reportWithoutComputerName, meta);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.system.computerName).toBeNull();
+    expect(result.value.system.productName).toBe('ASUS TUF Gaming F16');
+  });
+
+  it('turns structured Groq endpoint errors into readable messages', async () => {
+    const result = parseReport(fixture, meta);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ error: { message: 'Groq could not complete the analysis.' } }),
+      { status: 502, headers: { 'Content-Type': 'application/json' } },
+    )));
+    await expect(requestAiReport(analyze(result.value))).rejects.toThrow('Groq could not complete the analysis.');
+  });
+
+  it('does not expose object coercion text when the API returns an invalid AI report', async () => {
+    const result = parseReport(fixture, meta);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ report: { summary: { text: 'wrong type' } } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )));
+    await expect(requestAiReport(analyze(result.value))).rejects.toThrow('AI analysis could not be completed');
   });
 
   it('extracts the cycle count from its labelled battery row', () => {

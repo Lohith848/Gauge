@@ -23,6 +23,11 @@ interface GaugeState {
 }
 
 const paint = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+const aiFailureMessage = (error: unknown) => {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === 'string' && error.trim()) return error.trim();
+  return 'AI analysis failed. Your calculated battery report is still available.';
+};
 
 export const useGaugeStore = create<GaugeState>((set, get) => ({
   report: null,
@@ -75,7 +80,7 @@ export const useGaugeStore = create<GaugeState>((set, get) => ({
       const aiReport = await requestAiReport(analysis);
       set({ aiReport, aiStatus: 'complete' });
     } catch (error) {
-      set({ aiStatus: 'error', aiError: error instanceof Error ? error.message : 'AI analysis failed.' });
+      set({ aiStatus: 'error', aiError: aiFailureMessage(error) });
     } finally {
       set({ loadingStage: 'ready' });
       await new Promise((resolve) => window.setTimeout(resolve, 450));
