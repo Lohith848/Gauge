@@ -6,7 +6,7 @@ export type PowerState = 'active' | 'connected-standby' | 'suspended' | 'report-
 export interface SourceMeta { fileName: string; fileSizeBytes: number; format: 'windows-html' | 'windows-xml' }
 export interface SystemInfo {
   computerName: string | null; productName: string | null; bios: string | null; osBuild: string | null;
-  platformRole: string | null; connectedStandby: string | null; reportTime: LocalDateTime; utcOffsetMinutes: number | null;
+  platformRole: string | null; connectedStandby: string | null; reportTime: LocalDateTime | null; utcOffsetMinutes: number | null;
 }
 export interface BatteryInfo {
   index: number; name: string | null; manufacturer: string | null; serialNumber: string | null;

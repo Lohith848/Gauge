@@ -1,5 +1,5 @@
 import type { Analysis } from '../analysis';
-import type { BatteryReport } from '../report/types';
+import type { PowerStateEntry } from '../report/types';
 
 export interface AiReport {
   summary: string;
@@ -10,15 +10,11 @@ export interface AiReport {
   generatedAt: string;
 }
 
-export type AiInputReport = Omit<BatteryReport, 'system' | 'batteries'> & {
-  system: Pick<BatteryReport['system'], 'productName' | 'osBuild' | 'platformRole' | 'connectedStandby' | 'reportTime' | 'utcOffsetMinutes'>;
-  batteries: Array<Omit<BatteryReport['batteries'][number], 'serialNumber'>>;
-};
-
-export interface AiPayload {
-  report: AiInputReport;
-  analysis: Pick<Analysis,
-    'healthPercent' | 'verdict' | 'designMwh' | 'fullChargeMwh' | 'capacityDropPercent' |
-    'runtimeHours' | 'batteryActiveHours' | 'acActiveHours' | 'batteryShare' |
-    'observations'>;
-}
+/** Aggregate calculations only. No report HTML, raw tables, filenames, or device identifiers. */
+export type AiPayload = Omit<Pick<Analysis,
+  'healthPercent' | 'verdict' | 'designMwh' | 'fullChargeMwh' | 'capacityLostMwh' |
+  'lossPercent' | 'cycleCount' | 'trend' | 'batteryActiveHours' | 'batteryStandbyHours' |
+  'acActiveHours' | 'acStandbyHours' | 'latestRuntimeSec' | 'averageRuntimeSec' |
+  'designRuntimeSec' | 'fullChargeRuntimeSec' | 'recentUsage'>, 'recentUsage'> & {
+    recentUsage: Array<Pick<PowerStateEntry, 'start' | 'state' | 'source' | 'remainingPercent' | 'remainingMwh'>>;
+  };

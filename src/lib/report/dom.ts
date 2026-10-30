@@ -77,7 +77,6 @@ export function parseHtmlReport(text: string, source: import('./types').SourceMe
     const sysRows = (data.system ?? []).filter((row) => !row.gap);
     const sysVals = sysRows.map((row) => row.cells[1]?.text ?? null);
     const reportCell = sysRows[6]?.cells[1];
-    const fallbackDate = new Date().toISOString().slice(0, 10);
     const recentRows = (data.recentUsage ?? []).filter((row) => !row.gap);
     const lastRecent = recentRows.at(-1)?.cells.find((item) => has(item, 'dateTime'));
     const carriedDate = [...recentRows].reverse().map((row) => {
@@ -85,7 +84,7 @@ export function parseHtmlReport(text: string, source: import('./types').SourceMe
       return dateCell?.date || datesOf(dateCell?.text ?? '')[0] || '';
     }).find(Boolean);
     const recentTime = lastRecent?.time || lastRecent?.text.match(/\d{1,2}:\d{2}:\d{2}/)?.[0];
-    const reportTime = reportCell?.date && reportCell?.time ? `${reportCell.date}T${reportCell.time}` : carriedDate && recentTime ? `${carriedDate}T${recentTime}` : `${fallbackDate}T00:00:00`;
+    const reportTime = reportCell?.date && reportCell?.time ? `${reportCell.date}T${reportCell.time}` : carriedDate && recentTime ? `${carriedDate}T${recentTime}` : null;
     if (!reportCell?.date) warnings.push({ code: 'W_REPORT_TIME_FALLBACK', message: 'The report time was not present.' });
     const system = {
       computerName: sysVals[0] ?? null, productName: sysVals[1] ?? null, bios: sysVals[2] ?? null,
@@ -107,12 +106,11 @@ export function parseHtmlReport(text: string, source: import('./types').SourceMe
     const batteries = rawBatteries.map((raw, index) => {
       const chem = raw.chemistryRaw;
       const cycleCount = parseFirstInt(raw.cycleCount ?? '');
-      if (cycleCount !== null && cycleCount > 10_000) warnings.push({ code: 'W_CYCLE_COUNT_RANGE', message: `A cycle count above 10,000 for battery ${index + 1} was ignored as an implausible report value.` });
       return {
         index, name: raw.name ?? null, manufacturer: raw.manufacturer ?? null, serialNumber: raw.serialNumber ?? null,
         chemistryRaw: chem ?? null, chemistryFriendly: chem ? friendlyChemistry[chem.toLowerCase()] ?? null : null,
         designCapacityMwh: parseFirstInt(raw.designCapacityMwh ?? ''), fullChargeCapacityMwh: parseFirstInt(raw.fullChargeCapacityMwh ?? ''),
-        cycleCount: cycleCount !== null && cycleCount <= 10_000 ? cycleCount : null,
+        cycleCount,
       };
     });
     if (!batteries.length) return { ok: false, error: makeParseError('E_NO_BATTERY') };
@@ -168,7 +166,9 @@ export function parseHtmlReport(text: string, source: import('./types').SourceMe
     const sinceRows = (data.runtimeSinceInstall ?? []).filter((r) => !r.gap); const since = sinceRows[0];
     const sinceCells = since?.cells.filter((c) => has(c, 'hms') || has(c, 'nullValue')) ?? [];
     const runtimeSinceInstall = since ? { atFullCharge: { activeSec: parseHms(sinceCells[0]?.text ?? ''), standby: parseEstimate(sinceCells[1]) }, atDesignCapacity: { activeSec: parseHms(sinceCells[2]?.text ?? ''), standby: parseEstimate(sinceCells[3]) } } : null;
-    if (!batteries.some((battery) => battery.designCapacityMwh !== null) || !(capacityHistory.length || usageHistory.length || recentUsage.length)) return { ok: false, error: makeParseError('E_NO_DATA') };
+    if (!batteries.some((battery) => battery.designCapacityMwh !== null && battery.fullChargeCapacityMwh !== null) || !capacityHistory.length || !usageHistory.length || !recentUsage.length || !runtimeEstimates.length) {
+      warnings.push({ code: 'W_MISSING_INFORMATION', message: 'Some information is unavailable in this report.' });
+    }
     return { ok: true, value: { schemaVersion: 1, source, system, batteries, recentUsage, drainHistory, usageHistory, capacityHistory, runtimeEstimates, runtimeSinceInstall, warnings } };
   } catch { return { ok: false, error: makeParseError('E_NOT_BATTERY_REPORT') }; }
 }

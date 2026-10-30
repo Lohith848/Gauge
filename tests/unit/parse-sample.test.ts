@@ -35,13 +35,12 @@ describe('Windows report intake', () => {
     expect(calculated.healthPercent).toBe(82);
   });
 
-  it('omits implausible cycle counts instead of presenting capacity-sized values as cycles', () => {
+  it('extracts the cycle count from its labelled battery row', () => {
     const withMisreadCycle = fixture.replace('<tr><td><span class="label">CYCLE COUNT</span></td><td class="nullValue">-</td>', '<tr><td><span class="label">CYCLE COUNT</span></td><td>46,168</td>');
     const result = parseReport(withMisreadCycle, meta);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.batteries[0]?.cycleCount).toBeNull();
-    expect(result.value.warnings.some((warning) => warning.code === 'W_CYCLE_COUNT_RANGE')).toBe(true);
+    expect(result.value.batteries[0]?.cycleCount).toBe(46_168);
   });
 
   it('returns the documented empty, XML, and non-report errors', () => {

@@ -1,15 +1,12 @@
 import { create } from 'zustand';
 import type { BatteryReport, ParseError } from '../lib/report/types';
 import { analyze, type Analysis } from '../lib/analysis';
-import { makeParseError, parseFile } from '../lib/report';
-import { clearCachedReport, readCachedReport, saveCachedAi, saveCachedReport } from '../lib/cache/report-cache';
+import { makeParseError, parseReport } from '../lib/report';
 import { requestAiReport } from '../lib/ai/client';
 import type { AiReport } from '../lib/ai/types';
 
 type AiStatus = 'idle' | 'loading' | 'complete' | 'error';
-type CacheStatus = 'loading' | 'saved' | 'missing' | 'unavailable';
-type LoadingStage = 'reading' | 'caching' | 'analyzing' | null;
-
+export type LoadingStage = 'reading' | 'parsing' | 'extracting' | 'calculating' | 'graphs' | 'analyzing' | 'ready' | null;
 interface GaugeState {
   report: BatteryReport | null;
   analysis: Analysis | null;
@@ -19,14 +16,13 @@ interface GaugeState {
   error: ParseError | null;
   loading: boolean;
   loadingStage: LoadingStage;
-  cacheStatus: CacheStatus;
-  cacheWarning: string | null;
   fileName: string | null;
-  restoreCache: () => Promise<void>;
   setFile: (file: File) => Promise<void>;
   analyzeWithAi: () => Promise<void>;
-  clear: () => Promise<void>;
+  clear: () => void;
 }
+
+const paint = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
 
 export const useGaugeStore = create<GaugeState>((set, get) => ({
   report: null,
@@ -37,82 +33,55 @@ export const useGaugeStore = create<GaugeState>((set, get) => ({
   error: null,
   loading: false,
   loadingStage: null,
-  cacheStatus: 'loading',
-  cacheWarning: null,
   fileName: null,
 
-  restoreCache: async () => {
-    try {
-      const cached = await readCachedReport();
-      if (!cached) {
-        set({ cacheStatus: 'missing' });
-        return;
-      }
-      const file = new File([cached.file], cached.fileName, { type: cached.fileType, lastModified: cached.lastModified });
-      const result = await parseFile(file);
-      if (!result.ok) {
-        await clearCachedReport();
-        set({ cacheStatus: 'missing', error: result.error });
-        return;
-      }
-      const analysis = analyze(result.value);
-      set({ report: result.value, analysis, aiReport: cached.ai, aiStatus: cached.ai ? 'complete' : 'idle', fileName: file.name, cacheStatus: 'saved' });
-      if (!cached.ai) void get().analyzeWithAi();
-    } catch {
-      set({ cacheStatus: 'unavailable', cacheWarning: 'Browser storage is unavailable. This report will not be restored after you close the tab.' });
-    }
-  },
-
   setFile: async (file) => {
-    set({ loading: true, loadingStage: 'reading', error: null, aiReport: null, aiStatus: 'idle', aiError: null, cacheWarning: null, fileName: file.name });
+    set({ loading: true, loadingStage: 'reading', error: null, report: null, analysis: null, aiReport: null, aiStatus: 'idle', aiError: null, fileName: file.name });
     try {
-      const result = await parseFile(file);
+      if (file.size > 10 * 1024 * 1024) {
+        set({ error: makeParseError('E_TOO_LARGE'), loading: false, loadingStage: null, fileName: null });
+        return;
+      }
+      if (!/\.html?$/i.test(file.name) && file.type !== 'text/html') {
+        set({ error: makeParseError('E_UNSUPPORTED_TYPE'), loading: false, loadingStage: null, fileName: null });
+        return;
+      }
+      await paint();
+      const text = await file.text();
+      set({ loadingStage: 'parsing' });
+      await paint();
+      set({ loadingStage: 'extracting' });
+      const result = parseReport(text, { fileName: file.name, fileSizeBytes: file.size, format: 'windows-html' });
       if (!result.ok) {
         set({ report: null, analysis: null, loading: false, loadingStage: null, error: result.error, fileName: null });
         return;
       }
+      set({ loadingStage: 'calculating' });
+      await paint();
       const analysis = analyze(result.value);
-      set({ loadingStage: 'caching' });
-      let cacheStatus: CacheStatus = 'saved';
-      let cacheWarning: string | null = null;
-      try {
-        await saveCachedReport(file);
-      } catch {
-        cacheStatus = 'unavailable';
-        cacheWarning = 'This report was read, but the browser could not cache it. It will not be restored after you close the tab.';
-      }
-      set({ report: result.value, analysis, loading: true, loadingStage: 'analyzing', error: null, cacheStatus, cacheWarning });
-      void get().analyzeWithAi();
+      set({ report: result.value, analysis, loadingStage: 'graphs', error: null });
+      await paint();
+      await get().analyzeWithAi();
     } catch {
       set({ report: null, analysis: null, error: makeParseError('E_NOT_BATTERY_REPORT'), loading: false, loadingStage: null, fileName: null });
     }
   },
 
   analyzeWithAi: async () => {
-    const { report, analysis } = get();
-    if (!report || !analysis) return;
-    set({ aiStatus: 'loading', aiError: null, ...(get().loading ? { loadingStage: 'analyzing' as const } : {}) });
+    const { analysis } = get();
+    if (!analysis) return;
+    set({ aiStatus: 'loading', aiError: null, loading: true, loadingStage: 'analyzing' });
     try {
-      const aiReport = await requestAiReport(report, analysis);
+      const aiReport = await requestAiReport(analysis);
       set({ aiReport, aiStatus: 'complete' });
-      try {
-        await saveCachedAi(aiReport);
-      } catch {
-        set({ cacheWarning: 'AI analysis is ready, but could not be saved in browser storage.' });
-      }
     } catch (error) {
       set({ aiStatus: 'error', aiError: error instanceof Error ? error.message : 'AI analysis failed.' });
     } finally {
+      set({ loadingStage: 'ready' });
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
       set({ loading: false, loadingStage: null });
     }
   },
 
-  clear: async () => {
-    set({ report: null, analysis: null, aiReport: null, aiStatus: 'idle', aiError: null, error: null, loading: false, loadingStage: null, fileName: null, cacheStatus: 'missing', cacheWarning: null });
-    try {
-      await clearCachedReport();
-    } catch {
-      set({ cacheWarning: 'The report was cleared from this view, but browser storage could not be cleared.' });
-    }
-  },
+  clear: () => set({ report: null, analysis: null, aiReport: null, aiStatus: 'idle', aiError: null, error: null, loading: false, loadingStage: null, fileName: null }),
 }));

@@ -1,6 +1,6 @@
 import type { Analysis } from '../analysis';
 import type { AiReport } from '../ai/types';
-import { formatWh } from '../report/text';
+import { formatDuration, formatWh } from '../report/text';
 import type { BatteryReport } from '../report/types';
 
 const WIDTH = 1200;
@@ -38,14 +38,15 @@ export function downloadReportImage(report: BatteryReport, analysis: Analysis, a
   };
 
   add('Gauge · Battery report', '600 32px Arial, sans-serif', '#17202b', 40, 8);
-  add(`${report.system.productName ?? 'Device not reported'}  ·  Report generated ${report.system.reportTime.slice(0, 10)}`, '15px Arial, sans-serif', '#637080', 22, 23);
+  add(`${report.system.productName ?? 'Device not reported'}  ·  Report generated ${report.system.reportTime?.slice(0, 10) ?? 'not reported'}`, '15px Arial, sans-serif', '#637080', 22, 23);
   add(analysis.healthPercent === null ? 'Battery health not reported' : `${analysis.healthPercent}% battery health`, '600 46px Arial, sans-serif', '#17202b', 54, 5);
   add(analysis.verdict, '16px Arial, sans-serif', '#4f5d6d', 24, 22);
   section('Measured summary', [
     `Full-charge capacity: ${formatWh(analysis.fullChargeMwh)}; design capacity: ${formatWh(analysis.designMwh)}.`,
-    `Capacity change from earliest available history: ${analysis.capacityDropPercent === null ? 'not enough data' : `${analysis.capacityDropPercent > 0 ? '−' : '+'}${Math.abs(analysis.capacityDropPercent)}%`}.`,
-    `Estimated active runtime: ${analysis.runtimeHours === null ? 'not enough measured discharge data' : `${analysis.runtimeHours.toFixed(1)} hours based on median measured discharge rate`}.`,
-    `Active use: ${analysis.batteryActiveHours.toFixed(1)} hours on battery and ${analysis.acActiveHours.toFixed(1)} hours on AC.`,
+    `Capacity lost from design: ${analysis.capacityLostMwh === null ? 'not reported' : `${analysis.capacityLostMwh} mWh`}; loss percentage: ${analysis.lossPercent === null ? 'not reported' : `${analysis.lossPercent.toFixed(1)}%`}.`,
+    `Latest runtime estimate: ${analysis.latestRuntimeSec === null ? 'not reported' : formatDuration(analysis.latestRuntimeSec)}; average: ${analysis.averageRuntimeSec === null ? 'not reported' : formatDuration(analysis.averageRuntimeSec)}.`,
+    `Runtime at design capacity: ${analysis.designRuntimeSec === null ? 'not reported' : formatDuration(analysis.designRuntimeSec)}; at full charge: ${analysis.fullChargeRuntimeSec === null ? 'not reported' : formatDuration(analysis.fullChargeRuntimeSec)}.`,
+    `Active use: ${analysis.batteryActiveHours === null ? 'not reported' : `${analysis.batteryActiveHours.toFixed(1)} hours`} on battery and ${analysis.acActiveHours === null ? 'not reported' : `${analysis.acActiveHours.toFixed(1)} hours`} on AC.`,
   ]);
   section('Battery cycle counts', report.batteries.map((battery, index) => `${battery.name ?? `Battery ${index + 1}`}: ${battery.cycleCount === null ? 'not reported' : `${battery.cycleCount} cycles`}`));
   section(ai ? 'AI breakdown' : 'Measured observations', ai ? [ai.summary, ...ai.findings.map((item) => `Finding: ${item}`), ...ai.recommendations.map((item) => `Recommendation: ${item}`), ...ai.limitations.map((item) => `Limitation: ${item}`)] : analysis.observations);
