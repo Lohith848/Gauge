@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AiPayload, AiReport } from '../lib/ai/types.ts';
 
 const MAX_BODY_BYTES = 1_000_000;
+const GROQ_TIMEOUT_MS = 45_000;
 const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const usageByClient = new Map<string, number[]>();
 
@@ -128,9 +129,10 @@ export async function handleGroqRequest(req: RequestWithBody, res: ServerRespons
           { role: 'user', content: JSON.stringify(payload) },
         ],
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(GROQ_TIMEOUT_MS),
     });
     if (!response.ok) {
+      console.error('[api/analyze] Groq request failed', { status: response.status });
       if (response.status === 429) return respond(res, 429, { error: 'Groq is rate limiting requests. Try again shortly.' });
       return respond(res, 502, { error: `Groq could not complete the analysis (HTTP ${response.status}).` });
     }
@@ -141,6 +143,11 @@ export async function handleGroqRequest(req: RequestWithBody, res: ServerRespons
     return respond(res, 200, { report: { ...parsed, model: completion.model ?? MODEL, generatedAt: new Date().toISOString() } satisfies AiReport });
   } catch (error) {
     if (error instanceof Error && error.message === 'INVALID_AI_OUTPUT') return respond(res, 502, { error: 'Groq returned an unreadable analysis. Please try again.' });
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      console.error('[api/analyze] Groq request timed out');
+      return respond(res, 504, { error: 'Groq took too long to respond. Your calculated report is ready; try the AI analysis again.' });
+    }
+    console.error('[api/analyze] Groq request could not be completed', { name: error instanceof Error ? error.name : 'UnknownError' });
     return respond(res, 502, { error: 'The AI service could not be reached. Your calculated battery report is still available.' });
   }
 }
